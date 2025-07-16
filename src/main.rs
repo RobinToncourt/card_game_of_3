@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_mut)]
 
-use std::cmp::{Ordering, PartialOrd};
+use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt;
 use std::fmt::Write;
 use std::io;
@@ -16,9 +16,9 @@ const QUEEN_RANK: usize = JACK_RANK + 1;
 const KING_RANK: usize = QUEEN_RANK + 1;
 const ACE_RANK: usize = KING_RANK + 1;
 
-const PLAYER_BEGINNIG_HAND_SIZE: usize = 3;
+const PLAYER_HAND_SIZE: usize = 3;
 const PLAYER_BOARD_SIZE: usize = 3;
-const PLAYER_HAND_BOARD_SIZE: usize = PLAYER_BEGINNIG_HAND_SIZE + PLAYER_BOARD_SIZE * 2;
+const PLAYER_HAND_BOARD_SIZE: usize = PLAYER_HAND_SIZE + PLAYER_BOARD_SIZE * 2;
 
 const NO_CARD: &str = "   ";
 const CANT_PLAY_CARD: &str = "You can't play this card.";
@@ -28,7 +28,7 @@ const NO_CARD_ON_STACK: &str = "No card left on this stack.";
 
 // The color of the card.
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Clone)]
 enum Suit {
     // ♣
     Club,
@@ -65,7 +65,7 @@ struct InvalidRankValue(usize);
 
 /// The rank of the card, in order.
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 enum Rank {
     Ace,
     King,
@@ -101,7 +101,12 @@ impl TryFrom<usize> for Rank {
 }
 impl PartialOrd for Rank {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value().partial_cmp(&other.value())
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Rank {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value().cmp(&other.value())
     }
 }
 impl fmt::Display for Rank {
@@ -117,7 +122,7 @@ impl fmt::Display for Rank {
 }
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Clone)]
+#[derive(Clone, Eq)]
 struct Card {
     color: Suit,
     value: Rank,
@@ -143,7 +148,12 @@ impl PartialEq for Card {
 }
 impl PartialOrd for Card {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value.partial_cmp(&other.value)
+        Some(self.cmp(other))
+    }
+}
+impl Ord for Card {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value.cmp(&other.value)
     }
 }
 impl fmt::Display for Card {
@@ -365,7 +375,13 @@ struct Game {
 impl Game {
     /// Start the main loop gameplay.
     fn start(&mut self) {
+        let mut player_replay = false;
         for i in (0..self.players.len()).cycle() {
+            if player_replay {
+                player_replay = false;
+                continue;
+            }
+
             let last_played_card_str = {
                 let last_played_card = self.playing_stack.last();
                 last_played_card.map_or(NO_CARD.to_string(), ToString::to_string)
@@ -385,13 +401,14 @@ impl Game {
                 if let Ok(selected_index) = buffer.trim_end().parse::<usize>() {
                     let card_view = self.players[i].get_card(selected_index);
 
-                    println!("{card_view:?}");
-
                     match card_view {
                         CardView::View(card_ref) => {
                             let last_played_card = self.playing_stack.last();
                             if can_play_card(last_played_card, card_ref, card_order) {
                                 let card = self.players[i].pop_card(selected_index).unwrap();
+                                if card.is(8) {
+                                    player_replay = true;
+                                }
                                 self.playing_stack.push(card);
                                 if let Some(card) = self.drawing_stack.pop() {
                                     self.players[i].hand.push(card);
@@ -412,6 +429,7 @@ impl Game {
                             } else {
                                 println!("{FACE_DOWN_CARD_NO_PLAYABLE}");
                                 self.players[i].hand.push(face_down_card);
+                                self.players[i].hand.append(&mut self.playing_stack);
                             }
                         }
                         CardView::OutOfBound => {
@@ -422,7 +440,21 @@ impl Game {
                         }
                     }
                 } else {
-                    println!("Enter a number.");
+                    match buffer.trim_end() {
+                        "take" => {
+                            if self.playing_stack.is_empty() {
+                                println!("no card to take");
+                            } else {
+                                self.players[i].hand.append(&mut self.playing_stack);
+                                is_selection_valid = true;
+                            }
+                        }
+                        "sort" => self.players[i].hand.sort(),
+                        "exit" => std::process::exit(0),
+                        _ => println!(
+                            "Enter a number or use one of these commands: exit, take, sort."
+                        ),
+                    }
                 }
             }
         }
@@ -507,10 +539,9 @@ fn create_game(player_names: Vec<String>, seed: Option<u64>) -> Game {
 }
 
 fn main() {
-    // TODO: 8 let the player play another turn.
     // TODO: 3 copy the previous card, modify `can_play_card` to account for that.
-    // TODO: When a player can't play a card, take the `playing_stack`.
-    // TODO: support exit, sort hand commands.
+    // TODO: draw until hand size if equals to `PLAYER_HAND_SIZE`.
+    // TODO: cards 10 empty the playing stack.
     let mut game = create_game(vec!["gem".to_string(), "mar".to_string()], None);
     game.start();
 }
