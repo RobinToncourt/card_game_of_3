@@ -540,6 +540,9 @@ fn create_game(player_names: Vec<String>, seed: Option<u64>) -> Game {
 
 fn main() {
     // TODO: 3 copy the previous card, modify `can_play_card` to account for that.
+    // TODO: player can play multiple card with the same value.
+    // TODO: add index next to the cards.
+    // TODO: use unicode card character for the cards.
     // TODO: draw until hand size if equals to `PLAYER_HAND_SIZE`.
     // TODO: cards 10 empty the playing stack.
     let mut game = create_game(vec!["gem".to_string(), "mar".to_string()], None);
